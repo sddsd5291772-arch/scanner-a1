@@ -22,7 +22,7 @@ def get_live_price():
         res = requests.get(url).json()
         return float(res['c'])
     except Exception as e:
-        print(f"Error fetching data: {e}")
+        print(f"❌ Error fetching data: {e}")
         return None
 
 def send_alert(msg):
@@ -30,7 +30,7 @@ def send_alert(msg):
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
     except Exception as e:
-        print(f"Error sending Telegram alert: {e}")
+        print(f"❌ Error sending Telegram alert: {e}")
 
 print("🚀 Starting real-time EUR/USD rolling volatility scanner...")
 
@@ -42,13 +42,19 @@ while time.time() - start_time < 1200:  # Run for ~20 minutes per execution sess
     if current_price:
         price_history.append(current_price)
         
+        # Track historical baseline information for calculation context
+        oldest_price = price_history[0]
+        percent_change = (current_price - oldest_price) / oldest_price
+        
+        # MONITORING LOGS: This prints to your GitHub Action console every 10 seconds
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+        print(f"[{timestamp}] Live Price: {current_price:.5f} | 5-Min Window Size: {len(price_history)}/{MAX_LEN} | 5-Min Move: {percent_change:+.4%}")
+        
         if len(price_history) >= MAX_LEN:
-            oldest_price = price_history[0]
-            percent_change = (current_price - oldest_price) / oldest_price
-            
             if abs(percent_change) >= THRESHOLD:
                 direction = "📈 UPWARD SPIKE" if percent_change > 0 else "📉 FLASH CRASH"
                 message = f"{direction}: EUR/USD moved {percent_change:.2%} in the trailing 5 minutes! (Price: {current_price})"
+                print(f"🚨 ALERT TRIGGERED: {message}")
                 send_alert(message)
                 price_history.clear() # Avoid alert spamming for the same continuous spike
                 
