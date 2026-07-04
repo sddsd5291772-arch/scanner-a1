@@ -1,13 +1,11 @@
 import os
-import sys
 import json
 import time
 import requests
 import websocket
 from collections import deque
 
-# Load secrets securely from GitHub Environment Variables
-TWELVE_DATA_TOKEN = os.environ.get("TWELVE_DATA_TOKEN")
+# Load Telegram credentials securely from GitHub Environment Variables
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
@@ -31,21 +29,21 @@ def on_message(ws, message):
     global last_processed_time
     data = json.loads(message)
     
-    # Process only target real-time price events
-    if data.get("event") == "price" and "price" in data:
+    # Deriv pushes real-time stream ticks inside a 'tick' dictionary object
+    if "tick" in data and "quote" in data["tick"]:
         current_time = time.time()
         
-        # Throttle calculations to every 10 seconds to avoid spamming the log lines
+        # Throttle calculations to every 10 seconds to keep logging clean
         if current_time - last_processed_time >= CHECK_INTERVAL_SEC:
             last_processed_time = current_time
-            current_price = float(data["price"])
+            current_price = float(data["tick"]["quote"])
             price_history.append(current_price)
             
             oldest_price = price_history[0]
             percent_change = (current_price - oldest_price) / oldest_price
             
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-            print(f"[{timestamp}] Live EUR/USD Stream: {current_price:.5f} | Buffer: {len(price_history)}/{MAX_LEN} | Trailing Move: {percent_change:+.4%}")
+            print(f"[{timestamp}] Live EUR/USD (Deriv Stream): {current_price:.5f} | Buffer: {len(price_history)}/{MAX_LEN} | Trailing Move: {percent_change:+.4%}")
             
             if len(price_history) >= MAX_LEN:
                 if abs(percent_change) >= THRESHOLD:
@@ -62,21 +60,18 @@ def on_close(ws, close_status_code, close_msg):
     print("🔌 WebSocket Connection Closed")
 
 def on_open(ws):
-    print("📡 Connection established. Subscribing to EUR/USD feed...")
-    # Send subscription handshake message parameters
+    print("📡 Connected to Deriv Public Cloud. Subscribing to EUR/USD feed...")
+    # Handshake payload subscription signature for Deriv
     subscribe_msg = {
-        "action": "subscribe",
-        "params": {
-            "symbols": "EUR/USD"
-        }
+        "ticks": "frxEURUSD"
     }
     ws.send(json.dumps(subscribe_msg))
 
 if __name__ == "__main__":
-    print("🚀 Starting real-time EUR/USD WebSocket volatility scanner...")
+    print("🚀 Starting real-time EUR/USD WebSocket volatility scanner (Deriv Engine)...")
     
-    # Twelve Data WebSocket infrastructure server URL routing endpoint
-    ws_url = f"wss://ws.twelvedata.com/v1/quotes/price?apikey={TWELVE_DATA_TOKEN}"
+    # Open app route to Deriv's international system ecosystem endpoint (App ID 1 is the public playground)
+    ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1"
     
     ws = websocket.WebSocketApp(
         ws_url,
@@ -86,5 +81,4 @@ if __name__ == "__main__":
         on_close=on_close
     )
     
-    # Run loop block wrapped with a maximum container lifetime safety window (~20 minutes)
     ws.run_forever(ping_interval=10, ping_timeout=5)
