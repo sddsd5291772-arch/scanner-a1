@@ -25,4 +25,5 @@ jobs:
           FINNHUB_TOKEN: ${{ secrets.FINNHUB_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PYTHONUNBUFFERED: '1' # 🔥 THIS FORCES PYTHON TO PRINT LIVE LOGS IMMEDIATELY
         run: python scanner.py
