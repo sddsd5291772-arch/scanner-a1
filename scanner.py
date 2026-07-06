@@ -10,13 +10,15 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 # --- TRACKING CONFIGURATION ---
-# Define the major currency pairs you want to monitor concurrently
 SYMBOLS = ["frxEURUSD", "frxGBPUSD", "frxAUDUSD", "frxUSDJPY"]
 
 WINDOW_DURATION_SEC = 300  
 CHECK_INTERVAL_SEC = 10    
 MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC # 30 data points per pair
 THRESHOLD = 0.005  # 0.5% move
+
+# Track when this specific runner container session started
+SCRIPT_START_TIME = time.time()
 
 # Initialize a separate rolling memory buffer for each symbol dynamically
 price_histories = {symbol: deque(maxlen=MAX_LEN) for symbol in SYMBOLS}
@@ -30,14 +32,20 @@ def send_alert(msg):
         print(f"❌ Error sending Telegram alert: {e}")
 
 def on_message(ws, message):
+    global SCRIPT_START_TIME
     data = json.loads(message)
     
+    # Check if our 20-minute (1200 seconds) session runtime has expired
+    if time.time() - SCRIPT_START_TIME >= 1200:
+        print("⏰ 20 minutes elapsed for this runner session. Closing connection to hand off to next cron job...")
+        ws.close()
+        return
+
     # Verify the incoming frame is a valid tick object
     if "tick" in data and "quote" in data["tick"] and "symbol" in data["tick"]:
         tick_data = data["tick"]
         symbol = tick_data["symbol"]
         
-        # Guard rail: ignore symbols we didn't explicitly subscribe to
         if symbol not in price_histories:
             return
             
@@ -55,7 +63,6 @@ def on_message(ws, message):
             oldest_price = history[0]
             percent_change = (current_price - oldest_price) / oldest_price
             
-            # Clean symbol printer name (e.g., "frxEURUSD" -> "EUR/USD")
             display_name = f"{symbol[3:6]}/{symbol[6:]}"
             
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
@@ -67,7 +74,7 @@ def on_message(ws, message):
                     msg = f"{direction}: {display_name} moved {percent_change:.2%} in the trailing 5 minutes! (Price: {current_price})"
                     print(f"🚨 ALERT TRIGGERED: {msg}")
                     send_alert(msg)
-                    history.clear() # Avoid spamming alerts for the exact same wave
+                    history.clear()
 
 def on_error(ws, error):
     print(f"❌ WebSocket Error: {error}")
@@ -78,14 +85,13 @@ def on_close(ws, close_status_code, close_msg):
 def on_open(ws):
     print(f"📡 Connected to Deriv Public Cloud. Initializing {len(SYMBOLS)} symbol pipelines...")
     
-    # Loop over our symbol group and fire sequential subscription handshakes
     for symbol in SYMBOLS:
         subscribe_msg = {
             "ticks": symbol
         }
         ws.send(json.dumps(subscribe_msg))
         print(f"   ↳ Subscribed to: {symbol}")
-        time.sleep(0.2) # Small pacing delay between requests
+        time.sleep(0.2)
 
 if __name__ == "__main__":
     print("🚀 Starting real-time Multi-Forex WebSocket Volatility Scanner...")
@@ -100,6 +106,5 @@ if __name__ == "__main__":
         on_close=on_close
     )
     
-    # FIX: run_forever will now automatically break and close down the script
-    # precisely after 20 minutes (1200 seconds), letting the next cron job take over!
-    ws.run_forever(ping_interval=10, ping_timeout=5, timeout=1200)
+    # Removed the invalid timeout argument to resolve the crash error
+    ws.run_forever(ping_interval=10, ping_timeout=5)
