@@ -73,7 +73,7 @@ def on_error(ws, error):
     print(f"❌ WebSocket Error: {error}")
 
 def on_close(ws, close_status_code, close_msg):
-    print("🔌 WebSocket Connection Closed")
+    print("🔌 WebSocket Connection Closed Gracefully")
 
 def on_open(ws):
     print(f"📡 Connected to Deriv Public Cloud. Initializing {len(SYMBOLS)} symbol pipelines...")
@@ -100,4 +100,6 @@ if __name__ == "__main__":
         on_close=on_close
     )
     
-    ws.run_forever(ping_interval=10, ping_timeout=5)
+    # FIX: run_forever will now automatically break and close down the script
+    # precisely after 20 minutes (1200 seconds), letting the next cron job take over!
+    ws.run_forever(ping_interval=10, ping_timeout=5, timeout=1200)
