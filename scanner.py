@@ -40,9 +40,8 @@ def trigger_next_runner():
         print("⚠️ Missing environment tokens. Continuous loop chain broken.")
         return
 
-    # Hardcoded exactly to match your repository workflow setup
     filename = "run-scanner.yml"
-    print(f"⛓️ Session limit reached. Chain-triggering target path file: '{filename}'...")
+    print(f"⛓️ Chain-triggering target path file: '{filename}'...")
     
     url = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/actions/workflows/{filename}/dispatches"
     
@@ -67,9 +66,7 @@ def on_message(ws, message):
     
     # Check if our 20-minute (1200 seconds) operational execution cycle is complete
     if time.time() - SCRIPT_START_TIME >= 1200:
-        print("⏰ 20 minutes elapsed for this runner session. Initiating handshake loop handoff...")
-        trigger_next_runner()
-        print("🔌 Disconnecting socket pipe...")
+        print("⏰ 20 minutes elapsed for this runner session. Closing connection to trigger next runner in on_close...")
         ws.close()
         return
 
@@ -83,7 +80,6 @@ def on_message(ws, message):
             
         current_time = time.time()
         
-        # Keep calculation evaluation processing limited to every 10 seconds per currency pair
         if current_time - last_processed_times[symbol] >= CHECK_INTERVAL_SEC:
             last_processed_times[symbol] = current_time
             current_price = float(tick_data["quote"])
@@ -109,7 +105,8 @@ def on_error(ws, error):
     print(f"❌ WebSocket Error encountered: {error}")
 
 def on_close(ws, close_status_code, close_msg):
-    print("🔌 WebSocket Connection Closed Gracefully")
+    print("🔌 WebSocket Connection Closed. Spawning next link in the chain to keep monitoring alive...")
+    trigger_next_runner()
 
 def on_open(ws):
     print(f"📡 Connected to Deriv Public Cloud. Initializing {len(SYMBOLS)} symbol data streams...")
