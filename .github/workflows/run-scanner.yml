@@ -2,8 +2,8 @@ name: Run Forex Volatility Scanner
 
 on:
   schedule:
-    - cron: '*/15 * * * *' 
-  workflow_dispatch: 
+    - cron: '0 0 * * *' # Fires once a day automatically as a backup safety kickstart
+  workflow_dispatch:   # Allows manual trigger button capability
 
 jobs:
   monitor:
@@ -22,8 +22,8 @@ jobs:
 
       - name: Execute Scanner Logic
         env:
-          TWELVE_DATA_TOKEN: ${{ secrets.TWELVE_DATA_TOKEN }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PYTHONUNBUFFERED: '1' 
+          PYTHONUNBUFFERED: '1'
         run: python scanner.py
