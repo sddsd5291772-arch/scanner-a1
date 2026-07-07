@@ -10,6 +10,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 PERSONAL_ACCESS_TOKEN = os.environ.get("PERSONAL_ACCESS_TOKEN")
 GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")  # Set automatically by GitHub
+GITHUB_WORKFLOW = os.environ.get("GITHUB_WORKFLOW")      # Set automatically by GitHub
 
 # --- TRACKING CONFIGURATION ---
 SYMBOLS = ["frxEURUSD", "frxGBPUSD", "frxAUDUSD", "frxUSDJPY"]
@@ -35,34 +36,33 @@ def send_alert(msg):
         print(f"❌ Error sending Telegram alert: {e}")
 
 def trigger_next_runner():
-    """Fires a GitHub REST API dispatch call to cleanly pass the execution baton"""
-    if not PERSONAL_ACCESS_TOKEN or not GITHUB_REPOSITORY:
-        print("⚠️ Missing authentication credentials. Continuous loop chain broken.")
+    """Fires a GitHub REST API dispatch call using the exact dynamic workflow ID"""
+    if not PERSONAL_ACCESS_TOKEN or not GITHUB_REPOSITORY or not GITHUB_WORKFLOW:
+        print("⚠️ Missing environment variables. Continuous loop chain broken.")
         return
 
-    print("⛓️ Session limit reached. Chain-triggering successor runner via GitHub REST API...")
+    print(f"⛓️ Session limit reached. Chain-triggering system via dynamic ID: '{GITHUB_WORKFLOW}'...")
     
-    # We will try both common workflow filenames sequentially to guarantee a match
-    possible_filenames = ["run-scanner.yml", "main.yml"]
+    # URL encoded string reference targeting your live active runtime profile ID directly
+    import urllib.parse
+    encoded_workflow = urllib.parse.quote(GITHUB_WORKFLOW)
+    
+    url = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/actions/workflows/{encoded_workflow}/dispatches"
+    
     headers = {
         "Authorization": f"token {PERSONAL_ACCESS_TOKEN}",
         "Accept": "application/vnd.github.v3+json"
     }
     payload = {"ref": "main"}
 
-    for filename in possible_filenames:
-        url = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/actions/workflows/{filename}/dispatches"
-        try:
-            response = requests.post(url, headers=headers, json=payload)
-            if response.status_code in [200, 204]:
-                print(f"✅ Success! Next runner dispatched via targets path entry: '{filename}'")
-                return
-            else:
-                print(f"ℹ️ Skipping check line '{filename}': received response status code {response.status_code}")
-        except Exception as e:
-            print(f"❌ Network issue tracking against target path '{filename}': {e}")
-            
-    print("❌ Critical: Loop chain severed. Verify your workflow YAML filename matches your Code repository path layout.")
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code in [200, 204]:
+            print("✅ Success! The next workflow link has been dispatched successfully.")
+        else:
+            print(f"❌ API Rejected execution dispatch request (Status {response.status_code}): {response.text}")
+    except Exception as e:
+        print(f"❌ Network issue dispatching next link: {e}")
 
 def on_message(ws, message):
     global SCRIPT_START_TIME
@@ -132,3 +132,4 @@ if __name__ == "__main__":
         on_close=on_close
     )
     ws.run_forever(ping_interval=10, ping_timeout=5)
+    
