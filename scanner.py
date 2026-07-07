@@ -9,22 +9,25 @@ from collections import deque
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 PERSONAL_ACCESS_TOKEN = os.environ.get("PERSONAL_ACCESS_TOKEN")
-GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")  # Handled automatically by GitHub
+GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")  # Set automatically by GitHub
 
 # --- TRACKING CONFIGURATION ---
 SYMBOLS = ["frxEURUSD", "frxGBPUSD", "frxAUDUSD", "frxUSDJPY"]
 
 WINDOW_DURATION_SEC = 300  
 CHECK_INTERVAL_SEC = 10    
-MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC # 30 data points per pair
-THRESHOLD = 0.005  # 0.5% move
+MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC  # 30 data points per pair
+THRESHOLD = 0.005  # 0.5% volatility alert trigger threshold
 
+# Keep track of when this virtual runner instance container launched
 SCRIPT_START_TIME = time.time()
 
+# Initialize separate rolling memory buffers for each asset pipeline
 price_histories = {symbol: deque(maxlen=MAX_LEN) for symbol in SYMBOLS}
 last_processed_times = {symbol: 0 for symbol in SYMBOLS}
 
 def send_alert(msg):
+    """Dispatches a real-time notification push to your Telegram channel"""
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
@@ -32,44 +35,48 @@ def send_alert(msg):
         print(f"❌ Error sending Telegram alert: {e}")
 
 def trigger_next_runner():
-    """Fires a GitHub REST API request to instantly spawn the successor container"""
+    """Fires a GitHub REST API dispatch call to cleanly pass the execution baton"""
     if not PERSONAL_ACCESS_TOKEN or not GITHUB_REPOSITORY:
-        print("⚠️ Missing environment tokens. Unable to chain-trigger next workflow.")
+        print("⚠️ Missing authentication credentials. Continuous loop chain broken.")
         return
 
-    print("⛓️ Chain-triggering the next workflow session via GitHub API...")
-    url = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/actions/workflows/run-scanner.yml/dispatches"
+    print("⛓️ Session limit reached. Chain-triggering successor runner via GitHub REST API...")
     
+    # We will try both common workflow filenames sequentially to guarantee a match
+    possible_filenames = ["run-scanner.yml", "main.yml"]
     headers = {
         "Authorization": f"token {PERSONAL_ACCESS_TOKEN}",
         "Accept": "application/vnd.github.v3+json"
     }
-    
-    payload = {
-        "ref": "main"  # Runs the script from your main branch
-    }
-    
-    try:
-        response = requests.post(url, headers=headers, json=payload)
-        if response.status_code in [200, 204]:
-            print("✅ Success! Next runner has been dispatched into the queue.")
-        else:
-            print(f"⚠️ Dispatch API returned status {response.status_code}: {response.text}")
-    except Exception as e:
-        print(f"❌ Network error trying to trigger next runner: {e}")
+    payload = {"ref": "main"}
+
+    for filename in possible_filenames:
+        url = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/actions/workflows/{filename}/dispatches"
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            if response.status_code in [200, 204]:
+                print(f"✅ Success! Next runner dispatched via targets path entry: '{filename}'")
+                return
+            else:
+                print(f"ℹ️ Skipping check line '{filename}': received response status code {response.status_code}")
+        except Exception as e:
+            print(f"❌ Network issue tracking against target path '{filename}': {e}")
+            
+    print("❌ Critical: Loop chain severed. Verify your workflow YAML filename matches your Code repository path layout.")
 
 def on_message(ws, message):
     global SCRIPT_START_TIME
     data = json.loads(message)
     
-    # Check if our 20-minute (1200 seconds) session runtime has expired
+    # Check if our 20-minute (1200 seconds) operational execution cycle is complete
     if time.time() - SCRIPT_START_TIME >= 1200:
-        print("⏰ 20 minutes elapsed for this runner session.")
-        trigger_next_runner()  # Hand off execution
-        print("🔌 Closing current connection...")
+        print("⏰ 20 minutes elapsed for this runner session. Initiating handshake loop handoff...")
+        trigger_next_runner()
+        print("🔌 Disconnecting socket pipe...")
         ws.close()
         return
 
+    # Process incoming tick frames cleanly
     if "tick" in data and "quote" in data["tick"] and "symbol" in data["tick"]:
         tick_data = data["tick"]
         symbol = tick_data["symbol"]
@@ -79,6 +86,7 @@ def on_message(ws, message):
             
         current_time = time.time()
         
+        # Keep calculation evaluation processing limited to every 10 seconds per currency pair
         if current_time - last_processed_times[symbol] >= CHECK_INTERVAL_SEC:
             last_processed_times[symbol] = current_time
             current_price = float(tick_data["quote"])
@@ -101,20 +109,20 @@ def on_message(ws, message):
                     history.clear()
 
 def on_error(ws, error):
-    print(f"❌ WebSocket Error: {error}")
+    print(f"❌ WebSocket Error encountered: {error}")
 
 def on_close(ws, close_status_code, close_msg):
     print("🔌 WebSocket Connection Closed Gracefully")
 
 def on_open(ws):
-    print(f"📡 Connected to Deriv Public Cloud. Initializing {len(SYMBOLS)} symbol pipelines...")
+    print(f"📡 Connected to Deriv Public Cloud. Initializing {len(SYMBOLS)} symbol data streams...")
     for symbol in SYMBOLS:
         subscribe_msg = {"ticks": symbol}
         ws.send(json.dumps(subscribe_msg))
         time.sleep(0.2)
 
 if __name__ == "__main__":
-    print("🚀 Starting real-time Multi-Forex WebSocket Volatility Scanner...")
+    print("🚀 Booting real-time Multi-Forex WebSocket Volatility Scanner...")
     ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1"
     ws = websocket.WebSocketApp(
         ws_url,
