@@ -5,9 +5,11 @@ import requests
 import websocket
 from collections import deque
 
-# Load Telegram credentials securely from GitHub Environment Variables
+# Load Secure Credentials from GitHub Environment Variables
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+PERSONAL_ACCESS_TOKEN = os.environ.get("PERSONAL_ACCESS_TOKEN")
+GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")  # Handled automatically by GitHub
 
 # --- TRACKING CONFIGURATION ---
 SYMBOLS = ["frxEURUSD", "frxGBPUSD", "frxAUDUSD", "frxUSDJPY"]
@@ -17,10 +19,8 @@ CHECK_INTERVAL_SEC = 10
 MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC # 30 data points per pair
 THRESHOLD = 0.005  # 0.5% move
 
-# Track when this specific runner container session started
 SCRIPT_START_TIME = time.time()
 
-# Initialize a separate rolling memory buffer for each symbol dynamically
 price_histories = {symbol: deque(maxlen=MAX_LEN) for symbol in SYMBOLS}
 last_processed_times = {symbol: 0 for symbol in SYMBOLS}
 
@@ -31,17 +31,45 @@ def send_alert(msg):
     except Exception as e:
         print(f"❌ Error sending Telegram alert: {e}")
 
+def trigger_next_runner():
+    """Fires a GitHub REST API request to instantly spawn the successor container"""
+    if not PERSONAL_ACCESS_TOKEN or not GITHUB_REPOSITORY:
+        print("⚠️ Missing environment tokens. Unable to chain-trigger next workflow.")
+        return
+
+    print("⛓️ Chain-triggering the next workflow session via GitHub API...")
+    url = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/actions/workflows/run-scanner.yml/dispatches"
+    
+    headers = {
+        "Authorization": f"token {PERSONAL_ACCESS_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    payload = {
+        "ref": "main"  # Runs the script from your main branch
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code in [200, 204]:
+            print("✅ Success! Next runner has been dispatched into the queue.")
+        else:
+            print(f"⚠️ Dispatch API returned status {response.status_code}: {response.text}")
+    except Exception as e:
+        print(f"❌ Network error trying to trigger next runner: {e}")
+
 def on_message(ws, message):
     global SCRIPT_START_TIME
     data = json.loads(message)
     
     # Check if our 20-minute (1200 seconds) session runtime has expired
     if time.time() - SCRIPT_START_TIME >= 1200:
-        print("⏰ 20 minutes elapsed for this runner session. Closing connection to hand off to next cron job...")
+        print("⏰ 20 minutes elapsed for this runner session.")
+        trigger_next_runner()  # Hand off execution
+        print("🔌 Closing current connection...")
         ws.close()
         return
 
-    # Verify the incoming frame is a valid tick object
     if "tick" in data and "quote" in data["tick"] and "symbol" in data["tick"]:
         tick_data = data["tick"]
         symbol = tick_data["symbol"]
@@ -51,12 +79,9 @@ def on_message(ws, message):
             
         current_time = time.time()
         
-        # Throttle parsing calculations independently per individual currency pair
         if current_time - last_processed_times[symbol] >= CHECK_INTERVAL_SEC:
             last_processed_times[symbol] = current_time
             current_price = float(tick_data["quote"])
-            
-            # Append to this specific symbol's vault pool
             price_histories[symbol].append(current_price)
             
             history = price_histories[symbol]
@@ -64,7 +89,6 @@ def on_message(ws, message):
             percent_change = (current_price - oldest_price) / oldest_price
             
             display_name = f"{symbol[3:6]}/{symbol[6:]}"
-            
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
             print(f"[{timestamp}] Live {display_name}: {current_price:.5f} | Buffer: {len(history)}/{MAX_LEN} | Trailing Move: {percent_change:+.4%}")
             
@@ -84,20 +108,14 @@ def on_close(ws, close_status_code, close_msg):
 
 def on_open(ws):
     print(f"📡 Connected to Deriv Public Cloud. Initializing {len(SYMBOLS)} symbol pipelines...")
-    
     for symbol in SYMBOLS:
-        subscribe_msg = {
-            "ticks": symbol
-        }
+        subscribe_msg = {"ticks": symbol}
         ws.send(json.dumps(subscribe_msg))
-        print(f"   ↳ Subscribed to: {symbol}")
         time.sleep(0.2)
 
 if __name__ == "__main__":
     print("🚀 Starting real-time Multi-Forex WebSocket Volatility Scanner...")
-    
     ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1"
-    
     ws = websocket.WebSocketApp(
         ws_url,
         on_open=on_open,
@@ -105,6 +123,4 @@ if __name__ == "__main__":
         on_error=on_error,
         on_close=on_close
     )
-    
-    # Removed the invalid timeout argument to resolve the crash error
     ws.run_forever(ping_interval=10, ping_timeout=5)
