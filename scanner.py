@@ -17,7 +17,7 @@ SYMBOLS = ["frxEURUSD", "frxGBPUSD", "frxAUDUSD", "frxUSDJPY"]
 WINDOW_DURATION_SEC = 300  
 CHECK_INTERVAL_SEC = 10    
 MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC  # 30 data points per pair
-THRESHOLD = 0.001  # 0.5% volatility alert trigger threshold
+THRESHOLD = 0.0005  # 0.5% volatility alert trigger threshold
 
 # Keep track of when this virtual runner instance container launched
 SCRIPT_START_TIME = time.time()
