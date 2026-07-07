@@ -10,7 +10,6 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 PERSONAL_ACCESS_TOKEN = os.environ.get("PERSONAL_ACCESS_TOKEN")
 GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")  # Set automatically by GitHub
-GITHUB_WORKFLOW = os.environ.get("GITHUB_WORKFLOW")      # Set automatically by GitHub
 
 # --- TRACKING CONFIGURATION ---
 SYMBOLS = ["frxEURUSD", "frxGBPUSD", "frxAUDUSD", "frxUSDJPY"]
@@ -36,18 +35,16 @@ def send_alert(msg):
         print(f"❌ Error sending Telegram alert: {e}")
 
 def trigger_next_runner():
-    """Fires a GitHub REST API dispatch call using the exact dynamic workflow ID"""
-    if not PERSONAL_ACCESS_TOKEN or not GITHUB_REPOSITORY or not GITHUB_WORKFLOW:
-        print("⚠️ Missing environment variables. Continuous loop chain broken.")
+    """Fires a GitHub REST API dispatch call using the absolute target filename"""
+    if not PERSONAL_ACCESS_TOKEN or not GITHUB_REPOSITORY:
+        print("⚠️ Missing environment tokens. Continuous loop chain broken.")
         return
 
-    print(f"⛓️ Session limit reached. Chain-triggering system via dynamic ID: '{GITHUB_WORKFLOW}'...")
+    # Hardcoded exactly to match your repository workflow setup
+    filename = "run-scanner.yml"
+    print(f"⛓️ Session limit reached. Chain-triggering target path file: '{filename}'...")
     
-    # URL encoded string reference targeting your live active runtime profile ID directly
-    import urllib.parse
-    encoded_workflow = urllib.parse.quote(GITHUB_WORKFLOW)
-    
-    url = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/actions/workflows/{encoded_workflow}/dispatches"
+    url = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/actions/workflows/{filename}/dispatches"
     
     headers = {
         "Authorization": f"token {PERSONAL_ACCESS_TOKEN}",
