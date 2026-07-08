@@ -19,7 +19,7 @@ CHECK_INTERVAL_SEC = 10
 MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC  # 30 data points per pair
 
 # Change this to 0.0010 to catch real 10-pip drops, or keep 0.0001 for hyper-sensitive testing
-THRESHOLD = 0.00050  
+THRESHOLD = 0.001  
 
 # Keep track of when this virtual runner instance container launched
 SCRIPT_START_TIME = time.time()
