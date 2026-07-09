@@ -28,7 +28,7 @@ CHECK_INTERVAL_SEC = 10
 MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC  # 30 data points per pair
 
 # Set to 0.0015 (0.15%) to catch rapid 15+ pip drops while filtering normal noise
-THRESHOLD = 0.0007  
+THRESHOLD = 0.0006  
 
 # Keep track of when this virtual runner instance container launched
 SCRIPT_START_TIME = time.time()
