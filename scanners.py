@@ -12,12 +12,23 @@ PERSONAL_ACCESS_TOKEN = os.environ.get("PERSONAL_ACCESS_TOKEN")
 GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")  # Set automatically by GitHub
 
 # --- TRACKING CONFIGURATION ---
-SYMBOLS = ["frxEURUSD", "frxGBPUSD", "frxAUDUSD", "frxUSDJPY"]
+SYMBOLS = [
+    "frxEURUSD",  # EUR/USD
+    "frxGBPUSD",  # GBP/USD
+    "frxAUDUSD",  # AUD/USD
+    "frxUSDJPY",  # USD/JPY
+    "frxNZDUSD",  # NZD/USD (Added to catch fast flushes!)
+    "frxUSDCAD",  # USD/CAD
+    "frxUSDCHF",  # USD/CHF
+    "frxEURGBP"   # EUR/GBP
+]
 
 WINDOW_DURATION_SEC = 300  
 CHECK_INTERVAL_SEC = 10    
 MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC  # 30 data points per pair
-THRESHOLD = 0.0001  # 0.5% volatility alert trigger threshold
+
+# Set to 0.0015 (0.15%) to catch rapid 15+ pip drops while filtering normal noise
+THRESHOLD = 0.0015  
 
 # Keep track of when this virtual runner instance container launched
 SCRIPT_START_TIME = time.time()
@@ -89,16 +100,21 @@ def on_message(ws, message):
             oldest_price = history[0]
             percent_change = (current_price - oldest_price) / oldest_price
             
+            # Formats names cleanly (e.g., frxEURUSD -> EUR/USD)
             display_name = f"{symbol[3:6]}/{symbol[6:]}"
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
             print(f"[{timestamp}] Live {display_name}: {current_price:.5f} | Buffer: {len(history)}/{MAX_LEN} | Trailing Move: {percent_change:+.4%}")
             
-            if len(history) >= MAX_LEN:
-                if abs(percent_change) >= THRESHOLD:
-                    direction = "📈 UPWARD SPIKE" if percent_change > 0 else "📉 FLASH CRASH"
-                    msg = f"{direction}: {display_name} moved {percent_change:.2%} in the trailing 5 minutes! (Price: {current_price})"
+            if len(history) >= 2:
+                # Only trigger if percent_change is negative and breaches the downward threshold
+                if percent_change <= -THRESHOLD:
+                    msg = f"📉 FLASH CRASH: {display_name} moved {percent_change:.2%} in the trailing window! (Price: {current_price})"
                     print(f"🚨 ALERT TRIGGERED: {msg}")
                     send_alert(msg)
+                    history.clear()
+                # Clear out positive spikes silently without hitting Telegram
+                elif percent_change >= THRESHOLD:
+                    print(f"ℹ️ Upward move detected ({percent_change:+.2%}), skipping notification.")
                     history.clear()
 
 def on_error(ws, error):
