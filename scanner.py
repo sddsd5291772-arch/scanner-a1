@@ -30,7 +30,7 @@ MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC  # 30 data points per pair
 
 # --- DYNAMIC THRESHOLDS ---
 FOREX_THRESHOLD = 0.0006  # 0.06% sensitivity for fiat pairs
-BTC_THRESHOLD   = 0.0050  # 0.50% wider safety net to catch real BTC flushes (~$300-500+ drops)
+BTC_THRESHOLD   = 0.002  # 0.50% wider safety net to catch real BTC flushes (~$300-500+ drops)
 
 # Keep track of when this virtual runner instance container launched
 SCRIPT_START_TIME = time.time()
