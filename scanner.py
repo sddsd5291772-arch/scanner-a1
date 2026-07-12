@@ -32,7 +32,7 @@ MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC  # 30 data points per pair
 # --- DYNAMIC THRESHOLDS ---
 FOREX_THRESHOLD = 0.0006  # 0.06% sensitivity for fiat pairs
 BTC_THRESHOLD   = 0.003  # 0.50% threshold for Bitcoin
-XMR_THRESHOLD   = 0.003  # 0.75% custom threshold tailored for Monero volatility
+XMR_THRESHOLD   = 0.0003  # 0.75% custom threshold tailored for Monero volatility
 
 # Keep track of when this virtual runner instance container launched
 SCRIPT_START_TIME = time.time()
