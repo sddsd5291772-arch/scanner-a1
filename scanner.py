@@ -20,7 +20,6 @@ SYMBOLS = [
     "cryBTCUSD", "cryXMRUSD"
 ]
 
-# Map Deriv names to Yahoo Finance tickers to get free real volume data
 YFINANCE_MAPPING = {
     "frxEURUSD": "EURUSD=X", "frxGBPUSD": "GBPUSD=X", "frxAUDUSD": "AUDUSD=X",
     "frxUSDJPY": "JPY=X",    "frxNZDUSD": "NZDUSD=X", "frxUSDCAD": "USDCAD=X",
@@ -37,33 +36,30 @@ FOREX_THRESHOLD = 0.0006
 BTC_THRESHOLD   = 0.0050  
 XMR_THRESHOLD   = 0.0075  
 
-# Dictionary to hold the dynamically calculated heatmap liquidity floors
+# Dictionaries to hold heatmap calculations and state tracking
 DYNAMIC_LIQUIDITY_FLOORS = {}
+LAST_ZONE_ALERT_TIME = {symbol: 0 for symbol in SYMBOLS} # 10-minute alert cooldown
 
 def calculate_heatmap_floors():
     """Fetches free historical weekly data with volume and calculates the BigBeluga floor"""
     print("🔮 Fetching free historical market depth to build volume heatmaps...")
     for deriv_symbol, yf_ticker in YFINANCE_MAPPING.items():
         try:
-            # Fetch weekly historical data (equivalent to 'W' timeframe input in Pine Script)
             ticker = yf.Ticker(yf_ticker)
             df = ticker.history(period="2y", interval="1wk")
             
             if df.empty or len(df) < 100:
                 continue
                 
-            # 1. Calculate 100-period ATR on Weekly bars
             high_low = df['High'] - df['Low']
             high_close = np.abs(df['High'] - df['Close'].shift())
             low_close = np.abs(df['Low'] - df['Close'].shift())
             ranges = np.max([high_low, high_close, low_close], axis=0)
             atr_100 = np.mean(ranges[-100:])
             
-            # 2. Replicate Pine Script configurations: binSize = ATR * 0.25
             bin_size = atr_100 * 0.25
             
-            # 3. Pull lookback historical range boundaries
-            recent_data = df.tail(40) # Limit window evaluation
+            recent_data = df.tail(40) 
             v_max = recent_data['High'].max()
             v_min = recent_data['Low'].min()
             total_range = v_max - v_min
@@ -71,7 +67,6 @@ def calculate_heatmap_floors():
             num_bins = min(40, int(np.floor(total_range / bin_size)))
             if num_bins < 10: num_bins = 10
             
-            # 4. Segment into bins and accumulate historical volume weights
             bin_edges = np.linspace(v_min, v_max, num_bins + 1)
             volume_bins = np.zeros(num_bins)
             
@@ -81,7 +76,6 @@ def calculate_heatmap_floors():
                     if bin_edges[idx] <= mid_price <= bin_edges[idx+1]:
                         volume_bins[idx] += bar['Volume'] if bar['Volume'] > 0 else 1
             
-            # Find the bin center with maximum volume density (High Density 75%-100% Yellow zone)
             max_volume_idx = np.argmax(volume_bins)
             highest_liquidity_floor = bin_edges[max_volume_idx]
             
@@ -145,18 +139,30 @@ def on_message(ws, message):
             
             price_format = f"{current_price:.2f}" if ("BTC" in display_name or "XMR" in display_name) else f"{current_price:.5f}"
             
-            # Fetch computed heatmap floor parameters
             heatmap_floor = DYNAMIC_LIQUIDITY_FLOORS.get(symbol, 0.0)
             floor_status = f"Floor: {heatmap_floor:.2f}" if "BTC" in display_name else f"Floor: {heatmap_floor:.5f}"
             
             print(f"[{timestamp}] Live {display_name}: {price_format} | Move: {percent_change:+.4%} | {floor_status}")
             
+            # ----------------------------------------------------
+            # NOTIFICATION TYPE 2: LIQUIDITY HEATMAP KEY ZONE ENTRY
+            # ----------------------------------------------------
+            if heatmap_floor > 0.0 and current_price <= heatmap_floor:
+                # Check 10-minute cooldown (600 seconds) to prevent spamming your phone on every tick
+                if current_time - LAST_ZONE_ALERT_TIME[symbol] >= 600:
+                    LAST_ZONE_ALERT_TIME[symbol] = current_time
+                    zone_msg = f"🧱 LIQUIDITY ZONE ENTRY: {display_name} has entered or fallen below the strong institutional heatmap zone floor!\nPrice: {price_format}\nZone Floor Level: {heatmap_floor}"
+                    print(f"🚨 NOTIFICATION (TYPE 2): {zone_msg}")
+                    send_alert(zone_msg)
+
+            # ----------------------------------------------------
+            # NOTIFICATION TYPE 1: TRADITIONAL VELOCITY FLASH CRASH
+            # ----------------------------------------------------
             if len(history) >= 2:
-                # CONDITION: Must breach drop velocity THRESHOLD *AND* be landing inside or below the Liquidity Zone Floor
-                if percent_change <= -current_threshold and current_price <= heatmap_floor:
-                    msg = f"🚨 LIQUIDITY HIT: {display_name} collapsed {percent_change:.2%} directly into institutional heatmap support! Price: {price_format} (Zone Floor: {heatmap_floor})"
-                    print(f"🚨 MATCH DETECTED: {msg}")
-                    send_alert(msg)
+                if percent_change <= -current_threshold:
+                    crash_msg = f"📉 FLASH CRASH: {display_name} collapsed {percent_change:.2%} inside the trailing 5-minute window! (Price: {price_format})"
+                    print(f"🚨 NOTIFICATION (TYPE 1): {crash_msg}")
+                    send_alert(crash_msg)
                     history.clear()
                 elif percent_change >= current_threshold:
                     history.clear()
@@ -172,7 +178,6 @@ def on_open(ws):
 
 if __name__ == "__main__":
     print("🚀 Booting real-time Volatility & Heatmap Scanner...")
-    # Calculate liquidity lines autonomously before opening connection
     calculate_heatmap_floors()
     
     price_histories = {symbol: deque(maxlen=MAX_LEN) for symbol in SYMBOLS}
