@@ -35,6 +35,7 @@ MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC
 FOREX_THRESHOLD = 0.0006  
 BTC_THRESHOLD   = 0.0050  
 XMR_THRESHOLD   = 0.0075  
+HEATMAP_BUFFER_PERCENT = 0.0005  # 0.0010 = 0.10% buffer away from the floor. Lower this to get tighter to the bottom.
 
 # Dictionaries to hold heatmap calculations and state tracking
 DYNAMIC_LIQUIDITY_FLOORS = {}
@@ -147,13 +148,17 @@ def on_message(ws, message):
             # ----------------------------------------------------
             # NOTIFICATION TYPE 2: LIQUIDITY HEATMAP KEY ZONE ENTRY
             # ----------------------------------------------------
-            if heatmap_floor > 0.0 and current_price <= heatmap_floor:
-                # Check 10-minute cooldown (600 seconds) to prevent spamming your phone on every tick
-                if current_time - LAST_ZONE_ALERT_TIME[symbol] >= 600:
-                    LAST_ZONE_ALERT_TIME[symbol] = current_time
-                    zone_msg = f"🧱 LIQUIDITY ZONE ENTRY: {display_name} has entered or fallen below the strong institutional heatmap zone floor!\nPrice: {price_format}\nZone Floor Level: {heatmap_floor}"
-                    print(f"🚨 NOTIFICATION (TYPE 2): {zone_msg}")
-                    send_alert(zone_msg)
+            if heatmap_floor > 0.0:
+                # Require price to be tightly converging near or past the lower floor block limit
+                target_trigger_zone = heatmap_floor * (1 + HEATMAP_BUFFER_PERCENT)
+                
+                if current_price <= target_trigger_zone:
+                    # Check 10-minute cooldown (600 seconds) to prevent spamming
+                    if current_time - LAST_ZONE_ALERT_TIME[symbol] >= 600:
+                        LAST_ZONE_ALERT_TIME[symbol] = current_time
+                        zone_msg = f"🧱 LIQUIDITY ZONE ENTRY: {display_name} has converged tightly toward the institutional heatmap floor!\nPrice: {price_format}\nTarget Trigger Level: {target_trigger_zone:.5f} (Floor: {heatmap_floor:.5f})"
+                        print(f"🚨 NOTIFICATION (TYPE 2): {zone_msg}")
+                        send_alert(zone_msg)
 
             # ----------------------------------------------------
             # NOTIFICATION TYPE 1: TRADITIONAL VELOCITY FLASH CRASH
@@ -186,4 +191,4 @@ if __name__ == "__main__":
     ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1"
     ws = websocket.WebSocketApp(ws_url, on_open=on_open, on_message=on_message, on_error=on_error, on_close=on_close)
     ws.run_forever(ping_interval=10, ping_timeout=5)
-            
+    
