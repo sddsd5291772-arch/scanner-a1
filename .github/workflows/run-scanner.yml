@@ -1,0 +1,33 @@
+name: Continuous Volatility & Heatmap Scanner
+
+on:
+  workflow_dispatch: # Allows the script to self-trigger and chain the next run
+
+jobs:
+  scan-market:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5 # Stops the job at 5 minutes to gracefully cycle the runner
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Python Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip" # Speeds up consecutive runs by caching downloaded packages
+
+      - name: Install Scanner Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install websocket-client requests numpy yfinance
+
+      - name: Run Real-Time Scanner Engine
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python scanner.py
+        
