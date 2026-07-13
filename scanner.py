@@ -35,7 +35,7 @@ MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC
 FOREX_THRESHOLD = 0.0006  
 BTC_THRESHOLD   = 0.0050  
 XMR_THRESHOLD   = 0.0075  
-HEATMAP_BUFFER_PERCENT = 0.00005  # 0.0010 = 0.10% buffer away from the floor. Lower this to get tighter to the bottom.
+HEATMAP_BUFFER_PERCENT = 0.000005  # 0.0010 = 0.10% buffer away from the floor. Lower this to get tighter to the bottom.
 
 # Dictionaries to hold heatmap calculations and state tracking
 DYNAMIC_LIQUIDITY_FLOORS = {}
