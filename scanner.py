@@ -17,14 +17,14 @@ GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")
 
 print("🔑 Environment variables loaded.", flush=True)
 
-# Direct universal major forex symbols used on Deriv websockets
-SYMBOLS = ["frxEURUSD", "frxGBPUSD", "frxAUDUSD", "frxUSDJPY", "frxNZDUSD", "frxUSDCAD", "frxUSDCHF", "frxEURGBP"]
+# Switched to Universal 24/7 Synthetic Volatility Indices
+SYMBOLS = ["R_10", "R_25", "R_50", "R_75", "R_100"]
 
 WINDOW_DURATION_SEC = 300  
 CHECK_INTERVAL_SEC = 10    
 MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC  
 
-FOREX_THRESHOLD = 0.0006  
+FOREX_THRESHOLD = 0.002  # Adjusted threshold for synthetic volatility scaling
 SCRIPT_START_TIME = time.time()
 
 price_histories = {symbol: deque(maxlen=MAX_LEN) for symbol in SYMBOLS}
@@ -72,7 +72,7 @@ def on_message(ws, message):
         data = json.loads(message)
         
         if "error" in data:
-            print(f"⚠️ API Error for {data.get('echo_req', {})}: {data['error'].get('message')}", flush=True)
+            print(f"⚠️ API Error: {data['error'].get('message')}", flush=True)
             return
 
         if "tick" in data and "quote" in data["tick"] and "symbol" in data["tick"]:
@@ -93,7 +93,7 @@ def on_message(ws, message):
                 percent_change = (current_price - oldest_price) / oldest_price
                 
                 timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-                print(f"[{timestamp}] Live {symbol}: {current_price:.5f} | Buffer: {len(history)}/{MAX_LEN} | Move: {percent_change:+.4%}", flush=True)
+                print(f"[{timestamp}] Live {symbol}: {current_price:.2f} | Buffer: {len(history)}/{MAX_LEN} | Move: {percent_change:+.4%}", flush=True)
 
     except Exception as e:
         print(f"❌ Error parsing message: {e}", flush=True)
@@ -106,7 +106,7 @@ def on_close(ws, close_status_code, close_msg):
     trigger_next_runner()
 
 def on_open(ws):
-    print(f"📡 WebSocket Handshake Successful! Subscribing directly to symbols...", flush=True)
+    print(f"📡 WebSocket Handshake Successful! Subscribing to synthetic volatility feeds...", flush=True)
     for symbol in SYMBOLS:
         sub_payload = {"ticks": symbol, "subscribe": 1}
         ws.send(json.dumps(sub_payload))
