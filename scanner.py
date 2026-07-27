@@ -1,16 +1,28 @@
+# --- IMMEDIATE HARDCODED STARTUP PRINT ---
+print("🔥 IMMEDIATE SCRIPT ENTRY: Python is reading the file!", flush=True)
+
 import os
+print("📦 Imported os successfully", flush=True)
 import json
+print("📦 Imported json successfully", flush=True)
 import time
+print("📦 Imported time successfully", flush=True)
 import requests
+print("📦 Imported requests successfully", flush=True)
 import websocket
+print("📦 Imported websocket successfully", flush=True)
 import threading
+print("📦 Imported threading successfully", flush=True)
 from collections import deque
+print("📦 Imported deque successfully", flush=True)
 
 # Load Secure Credentials from GitHub Environment Variables
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 PERSONAL_ACCESS_TOKEN = os.environ.get("PERSONAL_ACCESS_TOKEN")
 GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")  # Set automatically by GitHub
+
+print("🔑 Environment variables loaded.", flush=True)
 
 # --- TRACKING CONFIGURATION ---
 SYMBOLS = [
@@ -146,10 +158,11 @@ def on_open(ws):
         time.sleep(0.2)
 
 if __name__ == "__main__":
-    print("🚀 TEXT CHECK VERIFICATION: Script execution started successfully!", flush=True)
+    print("🚀 MAIN BLOCK REACHED: Script execution is fully active!", flush=True)
     print("🚀 Booting real-time Forex WebSocket Volatility Scanner...", flush=True)
     
     ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
+    print(f"🌐 Target WebSocket URL configured: {ws_url}", flush=True)
     
     ws = websocket.WebSocketApp(
         ws_url,
@@ -165,4 +178,4 @@ if __name__ == "__main__":
     
     print("🌐 Entering continuous event loop (run_forever)...", flush=True)
     ws.run_forever(ping_interval=10, ping_timeout=5)
-        
+    
