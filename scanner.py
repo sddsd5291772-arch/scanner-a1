@@ -3,6 +3,7 @@ import json
 import time
 import requests
 import websocket
+import threading
 from collections import deque
 
 # Load Secure Credentials from GitHub Environment Variables
@@ -71,16 +72,18 @@ def trigger_next_runner():
     except Exception as e:
         print(f"❌ Network issue dispatching next link: {e}")
 
+def timeout_checker(ws):
+    """Runs in a background thread to enforce the 20-minute kill-switch safely."""
+    while True:
+        if time.time() - SCRIPT_START_TIME >= 1200:
+            print("⏰ 20 minutes elapsed for this runner session. Closing connection to trigger next runner...")
+            ws.close()
+            break
+        time.sleep(10)  # Check every 10 seconds
+
 def on_message(ws, message):
-    global SCRIPT_START_TIME
     data = json.loads(message)
     
-    # Check if our 20-minute (1200 seconds) operational execution cycle is complete
-    if time.time() - SCRIPT_START_TIME >= 1200:
-        print("⏰ 20 minutes elapsed for this runner session. Closing connection to trigger next runner in on_close...")
-        ws.close()
-        return
-
     # Process incoming tick frames cleanly
     if "tick" in data and "quote" in data["tick"] and "symbol" in data["tick"]:
         tick_data = data["tick"]
@@ -140,6 +143,7 @@ def on_open(ws):
 if __name__ == "__main__":
     print("🚀 Booting real-time Forex WebSocket Volatility Scanner...")
     ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1"
+    
     ws = websocket.WebSocketApp(
         ws_url,
         on_open=on_open,
@@ -147,4 +151,11 @@ if __name__ == "__main__":
         on_error=on_error,
         on_close=on_close
     )
+    
+    # Start the timeout checker in a background daemon thread
+    timer_thread = threading.Thread(target=timeout_checker, args=(ws,))
+    timer_thread.daemon = True
+    timer_thread.start()
+    
     ws.run_forever(ping_interval=10, ping_timeout=5)
+            
