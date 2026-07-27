@@ -5,7 +5,6 @@ import os
 import json
 import time
 import requests
-import websocket
 import threading
 from collections import deque
 
@@ -17,18 +16,17 @@ GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")
 
 print("🔑 Environment variables loaded.", flush=True)
 
-# Using Deriv's primary public synthetic symbol codes
-SYMBOLS = ["1HZ10V", "1HZ25V", "1HZ50V", "1HZ75V", "1HZ100V"]
+# Yahoo Finance Tickers for Major Forex Pairs
+SYMBOLS = ["EURUSD=X", "GBPUSD=X", "AUDUSD=X", "USDJPY=X", "NZDUSD=X", "USDCAD=X", "USDCHF=X", "EURGBP=X"]
 
 WINDOW_DURATION_SEC = 300  
 CHECK_INTERVAL_SEC = 10    
 MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC  
 
-FOREX_THRESHOLD = 0.002  
+FOREX_THRESHOLD = 0.0006  
 SCRIPT_START_TIME = time.time()
 
 price_histories = {symbol: deque(maxlen=MAX_LEN) for symbol in SYMBOLS}
-last_processed_times = {symbol: 0 for symbol in SYMBOLS}
 
 def send_alert(msg):
     try:
@@ -58,77 +56,53 @@ def trigger_next_runner():
     except Exception as e:
         print(f"❌ Network issue dispatching next link: {e}", flush=True)
 
-def timeout_checker(ws):
-    print("⏱️ Background timeout watcher thread initialized.", flush=True)
+def fetch_yahoo_prices():
+    """Fetches live prices via Yahoo Finance public API endpoint"""
+    headers = {'User-Agent': 'Mozilla/5.0'}
     while True:
-        if time.time() - SCRIPT_START_TIME >= 1200:
-            print("⏰ 20 minutes elapsed. Closing connection...", flush=True)
-            ws.close()
+        elapsed = time.time() - SCRIPT_START_TIME
+        if elapsed >= 1200:
+            print("⏰ 20 minutes elapsed. Closing loop...", flush=True)
             break
-        time.sleep(10)
 
-def on_message(ws, message):
-    try:
-        data = json.loads(message)
-        
-        if "error" in data:
-            print(f"⚠️ API Error: {data['error'].get('message')}", flush=True)
-            return
-
-        if "tick" in data and "quote" in data["tick"] and "symbol" in data["tick"]:
-            tick_data = data["tick"]
-            symbol = tick_data["symbol"]
+        for symbol in SYMBOLS:
+            try:
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1m&range=1d"
+                response = requests.get(url, headers=headers, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    result = data['chart']['result'][0]
+                    current_price = result['meta']['regularMarketPrice']
+                    
+                    price_histories[symbol].append(current_price)
+                    history = price_histories[symbol]
+                    
+                    if len(history) >= 2:
+                        oldest_price = history[0]
+                        percent_change = (current_price - oldest_price) / oldest_price
+                        display_name = symbol.replace("=X", "")
+                        timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+                        
+                        print(f"[{timestamp}] Live {display_name}: {current_price:.5f} | Buffer: {len(history)}/{MAX_LEN} | Move: {percent_change:+.4%}", flush=True)
+                        
+                        if percent_change <= -FOREX_THRESHOLD:
+                            msg = f"📉 FLASH CRASH: {display_name} moved {percent_change:.2%}! (Price: {current_price:.5f})"
+                            print(f"🚨 ALERT: {msg}", flush=True)
+                            send_alert(msg)
+                            history.clear()
+            except Exception as e:
+                print(f"⚠️ Error fetching {symbol}: {e}", flush=True)
             
-            if symbol not in price_histories:
-                return
-                
-            current_time = time.time()
-            if current_time - last_processed_times[symbol] >= CHECK_INTERVAL_SEC:
-                last_processed_times[symbol] = current_time
-                current_price = float(tick_data["quote"])
-                price_histories[symbol].append(current_price)
-                
-                history = price_histories[symbol]
-                oldest_price = history[0]
-                percent_change = (current_price - oldest_price) / oldest_price
-                
-                timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-                print(f"[{timestamp}] Live {symbol}: {current_price:.2f} | Buffer: {len(history)}/{MAX_LEN} | Move: {percent_change:+.4%}", flush=True)
-
-    except Exception as e:
-        print(f"❌ Error parsing message: {e}", flush=True)
-
-def on_error(ws, error):
-    print(f"❌ WebSocket Error: {error}", flush=True)
-
-def on_close(ws, close_status_code, close_msg):
-    print(f"🔌 Connection Closed. Spawning next link...", flush=True)
-    trigger_next_runner()
-
-def on_open(ws):
-    print(f"📡 WebSocket Handshake Successful! Subscribing to live ticks...", flush=True)
-    for symbol in SYMBOLS:
-        sub_payload = {"ticks": symbol, "subscribe": 1}
-        ws.send(json.dumps(sub_payload))
-        print(f"📤 Sent subscription for: {symbol}", flush=True)
-        time.sleep(0.2)
+            time.sleep(1)
+        
+        time.sleep(CHECK_INTERVAL_SEC)
 
 if __name__ == "__main__":
-    print("🚀 MAIN BLOCK REACHED: Script execution is fully active!", flush=True)
-    # Updated to official public application endpoint ID 1080
-    ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1080"
+    print("🚀 MAIN BLOCK REACHED: Yahoo Finance Scanner active!", flush=True)
     
-    ws = websocket.WebSocketApp(
-        ws_url,
-        on_open=on_open,
-        on_message=on_message,
-        on_error=on_error,
-        on_close=on_close
-    )
+    # Run the price polling loop
+    fetch_yahoo_prices()
     
-    timer_thread = threading.Thread(target=timeout_checker, args=(ws,))
-    timer_thread.daemon = True
-    timer_thread.start()
+    print("🔌 Session Complete. Spawning next link...", flush=True)
+    trigger_next_runner()
     
-    ws.run_forever(ping_interval=10, ping_timeout=5)
-        
