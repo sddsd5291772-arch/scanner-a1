@@ -17,14 +17,14 @@ GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")
 
 print("🔑 Environment variables loaded.", flush=True)
 
-# Switched to Universal 24/7 Synthetic Volatility Indices
-SYMBOLS = ["R_10", "R_25", "R_50", "R_75", "R_100"]
+# Using Deriv's primary public synthetic symbol codes
+SYMBOLS = ["1HZ10V", "1HZ25V", "1HZ50V", "1HZ75V", "1HZ100V"]
 
 WINDOW_DURATION_SEC = 300  
 CHECK_INTERVAL_SEC = 10    
 MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC  
 
-FOREX_THRESHOLD = 0.002  # Adjusted threshold for synthetic volatility scaling
+FOREX_THRESHOLD = 0.002  
 SCRIPT_START_TIME = time.time()
 
 price_histories = {symbol: deque(maxlen=MAX_LEN) for symbol in SYMBOLS}
@@ -106,7 +106,7 @@ def on_close(ws, close_status_code, close_msg):
     trigger_next_runner()
 
 def on_open(ws):
-    print(f"📡 WebSocket Handshake Successful! Subscribing to synthetic volatility feeds...", flush=True)
+    print(f"📡 WebSocket Handshake Successful! Subscribing to live ticks...", flush=True)
     for symbol in SYMBOLS:
         sub_payload = {"ticks": symbol, "subscribe": 1}
         ws.send(json.dumps(sub_payload))
@@ -115,7 +115,8 @@ def on_open(ws):
 
 if __name__ == "__main__":
     print("🚀 MAIN BLOCK REACHED: Script execution is fully active!", flush=True)
-    ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
+    # Updated to official public application endpoint ID 1080
+    ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1080"
     
     ws = websocket.WebSocketApp(
         ws_url,
@@ -130,4 +131,4 @@ if __name__ == "__main__":
     timer_thread.start()
     
     ws.run_forever(ping_interval=10, ping_timeout=5)
-    
+        
