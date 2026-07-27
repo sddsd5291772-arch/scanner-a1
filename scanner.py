@@ -44,16 +44,16 @@ def send_alert(msg):
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
     except Exception as e:
-        print(f"❌ Error sending Telegram alert: {e}")
+        print(f"❌ Error sending Telegram alert: {e}", flush=True)
 
 def trigger_next_runner():
     """Fires a GitHub REST API dispatch call using the absolute target filename"""
     if not PERSONAL_ACCESS_TOKEN or not GITHUB_REPOSITORY:
-        print("⚠️ Missing environment tokens. Continuous loop chain broken.")
+        print("⚠️ Missing environment tokens. Continuous loop chain broken.", flush=True)
         return
 
     filename = "run-scanner.yml"
-    print(f"⛓️ Chain-triggering target path file: '{filename}'...")
+    print(f"⛓️ Chain-triggering target path file: '{filename}'...", flush=True)
     
     url = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/actions/workflows/{filename}/dispatches"
     
@@ -66,17 +66,17 @@ def trigger_next_runner():
     try:
         response = requests.post(url, headers=headers, json=payload)
         if response.status_code in [200, 204]:
-            print("✅ Success! The next workflow link has been dispatched successfully.")
+            print("✅ Success! The next workflow link has been dispatched successfully.", flush=True)
         else:
-            print(f"❌ API Rejected execution dispatch request (Status {response.status_code}): {response.text}")
+            print(f"❌ API Rejected execution dispatch request (Status {response.status_code}): {response.text}", flush=True)
     except Exception as e:
-        print(f"❌ Network issue dispatching next link: {e}")
+        print(f"❌ Network issue dispatching next link: {e}", flush=True)
 
 def timeout_checker(ws):
     """Runs in a background thread to enforce the 20-minute kill-switch safely."""
     while True:
         if time.time() - SCRIPT_START_TIME >= 1200:
-            print("⏰ 20 minutes elapsed for this runner session. Closing connection to trigger next runner...")
+            print("⏰ 20 minutes elapsed for this runner session. Closing connection to trigger next runner...", flush=True)
             ws.close()
             break
         time.sleep(10)  # Check every 10 seconds
@@ -112,36 +112,36 @@ def on_message(ws, message):
             # Formats price visualization logic cleanly
             price_format = f"{current_price:.5f}"
                 
-            print(f"[{timestamp}] Live {display_name}: {price_format} | Buffer: {len(history)}/{MAX_LEN} | Trailing Move: {percent_change:+.4%} (Limit: -{current_threshold:.4%})")
+            print(f"[{timestamp}] Live {display_name}: {price_format} | Buffer: {len(history)}/{MAX_LEN} | Trailing Move: {percent_change:+.4%} (Limit: -{current_threshold:.4%})", flush=True)
             
             if len(history) >= 2:
                 # Only trigger if percent_change is negative and breaches its assigned custom threshold
                 if percent_change <= -current_threshold:
                     msg = f"📉 FLASH CRASH: {display_name} moved {percent_change:.2%} in the trailing window! (Price: {price_format})"
-                    print(f"🚨 ALERT TRIGGERED: {msg}")
+                    print(f"🚨 ALERT TRIGGERED: {msg}", flush=True)
                     send_alert(msg)
                     history.clear()
                 # Clear out positive spikes silently without hitting Telegram
                 elif percent_change >= current_threshold:
-                    print(f"ℹ️ Upward move detected ({percent_change:+.2%}), skipping notification.")
+                    print(f"ℹ️ Upward move detected ({percent_change:+.2%}), skipping notification.", flush=True)
                     history.clear()
 
 def on_error(ws, error):
-    print(f"❌ WebSocket Error encountered: {error}")
+    print(f"❌ WebSocket Error encountered: {error}", flush=True)
 
 def on_close(ws, close_status_code, close_msg):
-    print("🔌 WebSocket Connection Closed. Spawning next link in the chain to keep monitoring alive...")
+    print("🔌 WebSocket Connection Closed. Spawning next link in the chain to keep monitoring alive...", flush=True)
     trigger_next_runner()
 
 def on_open(ws):
-    print(f"📡 Connected to Deriv Public Cloud. Initializing {len(SYMBOLS)} symbol data streams...")
+    print(f"📡 Connected to Deriv Public Cloud. Initializing {len(SYMBOLS)} symbol data streams...", flush=True)
     for symbol in SYMBOLS:
         subscribe_msg = {"ticks": symbol}
         ws.send(json.dumps(subscribe_msg))
         time.sleep(0.2)
 
 if __name__ == "__main__":
-    print("🚀 Booting real-time Forex WebSocket Volatility Scanner...")
+    print("🚀 Booting real-time Forex WebSocket Volatility Scanner...", flush=True)
     ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1"
     
     ws = websocket.WebSocketApp(
@@ -158,4 +158,4 @@ if __name__ == "__main__":
     timer_thread.start()
     
     ws.run_forever(ping_interval=10, ping_timeout=5)
-            
+    
