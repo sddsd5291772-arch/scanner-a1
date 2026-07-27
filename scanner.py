@@ -84,12 +84,18 @@ def timeout_checker(ws):
 def on_message(ws, message):
     data = json.loads(message)
     
+    # DEBUG: Catch and print any API errors sent by Deriv
+    if "error" in data:
+        print(f"⚠️ DERIV API ERROR: {data['error']['message']}", flush=True)
+        return
+
     # Process incoming tick frames cleanly
     if "tick" in data and "quote" in data["tick"] and "symbol" in data["tick"]:
         tick_data = data["tick"]
         symbol = tick_data["symbol"]
         
         if symbol not in price_histories:
+            print(f"⚠️ Received unrequested symbol: {symbol}", flush=True)
             return
             
         current_time = time.time()
@@ -125,6 +131,10 @@ def on_message(ws, message):
                 elif percent_change >= current_threshold:
                     print(f"ℹ️ Upward move detected ({percent_change:+.2%}), skipping notification.", flush=True)
                     history.clear()
+    else:
+        # DEBUG: Print messages that aren't ticks (like subscription confirmations)
+        if "msg_type" in data and data["msg_type"] != "tick":
+            print(f"ℹ️ API Response: {data}", flush=True)
 
 def on_error(ws, error):
     print(f"❌ WebSocket Error encountered: {error}", flush=True)
