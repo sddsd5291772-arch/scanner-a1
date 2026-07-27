@@ -79,23 +79,23 @@ def timeout_checker(ws):
             print("⏰ 20 minutes elapsed for this runner session. Closing connection to trigger next runner...", flush=True)
             ws.close()
             break
-        time.sleep(10)  # Check every 10 seconds
+        time.sleep(10)
 
 def on_message(ws, message):
     data = json.loads(message)
     
-    # DEBUG: Catch and print any API errors sent by Deriv
+    # Print out everything coming from Deriv to completely eliminate blind spots
+    print(f"📥 RAW WebSocket Message Received: {data}", flush=True)
+
     if "error" in data:
         print(f"⚠️ DERIV API ERROR: {data['error']['message']}", flush=True)
         return
 
-    # Process incoming tick frames cleanly
     if "tick" in data and "quote" in data["tick"] and "symbol" in data["tick"]:
         tick_data = data["tick"]
         symbol = tick_data["symbol"]
         
         if symbol not in price_histories:
-            print(f"⚠️ Received unrequested symbol: {symbol}", flush=True)
             return
             
         current_time = time.time()
@@ -109,32 +109,22 @@ def on_message(ws, message):
             oldest_price = history[0]
             percent_change = (current_price - oldest_price) / oldest_price
             
-            # Dynamically isolates display labels (e.g., frxEURUSD -> EUR/USD)
             display_name = f"{symbol[3:6]}/{symbol[6:]}"
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-            
             current_threshold = FOREX_THRESHOLD
-            
-            # Formats price visualization logic cleanly
             price_format = f"{current_price:.5f}"
                 
             print(f"[{timestamp}] Live {display_name}: {price_format} | Buffer: {len(history)}/{MAX_LEN} | Trailing Move: {percent_change:+.4%} (Limit: -{current_threshold:.4%})", flush=True)
             
             if len(history) >= 2:
-                # Only trigger if percent_change is negative and breaches its assigned custom threshold
                 if percent_change <= -current_threshold:
                     msg = f"📉 FLASH CRASH: {display_name} moved {percent_change:.2%} in the trailing window! (Price: {price_format})"
                     print(f"🚨 ALERT TRIGGERED: {msg}", flush=True)
                     send_alert(msg)
                     history.clear()
-                # Clear out positive spikes silently without hitting Telegram
                 elif percent_change >= current_threshold:
                     print(f"ℹ️ Upward move detected ({percent_change:+.2%}), skipping notification.", flush=True)
                     history.clear()
-    else:
-        # DEBUG: Print messages that aren't ticks (like subscription confirmations)
-        if "msg_type" in data and data["msg_type"] != "tick":
-            print(f"ℹ️ API Response: {data}", flush=True)
 
 def on_error(ws, error):
     print(f"❌ WebSocket Error encountered: {error}", flush=True)
@@ -146,13 +136,14 @@ def on_close(ws, close_status_code, close_msg):
 def on_open(ws):
     print(f"📡 Connected to Deriv Public Cloud. Initializing {len(SYMBOLS)} symbol data streams...", flush=True)
     for symbol in SYMBOLS:
-        subscribe_msg = {"ticks": symbol}
+        subscribe_msg = {"ticks": symbol, "subscribe": 1}
         ws.send(json.dumps(subscribe_msg))
+        print(f"📤 Sent subscription request for: {symbol}", flush=True)
         time.sleep(0.2)
 
 if __name__ == "__main__":
     print("🚀 Booting real-time Forex WebSocket Volatility Scanner...", flush=True)
-    ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1"
+    ws_url = "wss://ws.derivws.com/websockets/v3?app_id=1089"  # Updated to a standard public test app_id
     
     ws = websocket.WebSocketApp(
         ws_url,
@@ -162,7 +153,6 @@ if __name__ == "__main__":
         on_close=on_close
     )
     
-    # Start the timeout checker in a background daemon thread
     timer_thread = threading.Thread(target=timeout_checker, args=(ws,))
     timer_thread.daemon = True
     timer_thread.start()
