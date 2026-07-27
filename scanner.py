@@ -17,9 +17,8 @@ GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")
 
 print("🔑 Environment variables loaded.", flush=True)
 
-# Target currency pairs we want to find and track
-TARGET_PAIRS = ["EURUSD", "GBPUSD", "AUDUSD", "USDJPY", "NZDUSD", "USDCAD", "USDCHF", "EURGBP"]
-active_resolved_symbols = []
+# Direct universal major forex symbols used on Deriv websockets
+SYMBOLS = ["frxEURUSD", "frxGBPUSD", "frxAUDUSD", "frxUSDJPY", "frxNZDUSD", "frxUSDCAD", "frxUSDCHF", "frxEURGBP"]
 
 WINDOW_DURATION_SEC = 300  
 CHECK_INTERVAL_SEC = 10    
@@ -28,8 +27,8 @@ MAX_LEN = WINDOW_DURATION_SEC // CHECK_INTERVAL_SEC
 FOREX_THRESHOLD = 0.0006  
 SCRIPT_START_TIME = time.time()
 
-price_histories = {}
-last_processed_times = {}
+price_histories = {symbol: deque(maxlen=MAX_LEN) for symbol in SYMBOLS}
+last_processed_times = {symbol: 0 for symbol in SYMBOLS}
 
 def send_alert(msg):
     try:
@@ -69,35 +68,13 @@ def timeout_checker(ws):
         time.sleep(10)
 
 def on_message(ws, message):
-    global active_resolved_symbols
     try:
         data = json.loads(message)
-        msg_type = data.get("msg_type")
-
-        # Step 1: Handle active symbols lookup response
-        if msg_type == "active_symbols":
-            symbols_data = data.get("active_symbols", [])
-            print(f"🔍 Received {len(symbols_data)} total assets from Deriv. Filtering for targets...", flush=True)
-            
-            for item in symbols_data:
-                symbol_code = item.get("symbol")
-                display_name = item.get("display_name", "")
-                
-                # Match target pairs dynamically against Deriv's internal symbol database
-                for target in TARGET_PAIRS:
-                    if target in symbol_code.upper():
-                        if symbol_code not in active_resolved_symbols:
-                            active_resolved_symbols.append(symbol_code)
-                            price_histories[symbol_code] = deque(maxlen=MAX_LEN)
-                            last_processed_times[symbol_code] = 0
-                            
-                            # Subscribe immediately to the valid discovered symbol code
-                            sub_payload = {"ticks": symbol_code, "subscribe": 1}
-                            ws.send(json.dumps(sub_payload))
-                            print(f"✅ Subscribed to verified symbol: {symbol_code} ({display_name})", flush=True)
+        
+        if "error" in data:
+            print(f"⚠️ API Error for {data.get('echo_req', {})}: {data['error'].get('message')}", flush=True)
             return
 
-        # Step 2: Handle live price ticks
         if "tick" in data and "quote" in data["tick"] and "symbol" in data["tick"]:
             tick_data = data["tick"]
             symbol = tick_data["symbol"]
@@ -118,9 +95,6 @@ def on_message(ws, message):
                 timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
                 print(f"[{timestamp}] Live {symbol}: {current_price:.5f} | Buffer: {len(history)}/{MAX_LEN} | Move: {percent_change:+.4%}", flush=True)
 
-        if "error" in data:
-            print(f"⚠️ API Error: {data['error'].get('message')}", flush=True)
-
     except Exception as e:
         print(f"❌ Error parsing message: {e}", flush=True)
 
@@ -132,13 +106,12 @@ def on_close(ws, close_status_code, close_msg):
     trigger_next_runner()
 
 def on_open(ws):
-    print(f"📡 WebSocket Handshake Successful! Requesting active symbol catalog...", flush=True)
-    # Request Deriv's full active symbol list to automatically find correct naming structures
-    active_symbols_request = {
-        "active_symbols": "brief",
-        "product_type": "basic"
-    }
-    ws.send(json.dumps(active_symbols_request))
+    print(f"📡 WebSocket Handshake Successful! Subscribing directly to symbols...", flush=True)
+    for symbol in SYMBOLS:
+        sub_payload = {"ticks": symbol, "subscribe": 1}
+        ws.send(json.dumps(sub_payload))
+        print(f"📤 Sent subscription for: {symbol}", flush=True)
+        time.sleep(0.2)
 
 if __name__ == "__main__":
     print("🚀 MAIN BLOCK REACHED: Script execution is fully active!", flush=True)
