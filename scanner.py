@@ -59,7 +59,7 @@ def trigger_next_runner():
     except Exception as e:
         print(f"❌ Network issue dispatching next link: {e}", flush=True)
 
-def detect_vertical_atr_spike(atr_history, min_jump_ratio=3.0):
+def detect_vertical_atr_spike(atr_history, min_jump_ratio=5.0):
     """Detects if the ATR has executed a vertical 'cliff' spike from a flat baseline."""
     if len(atr_history) < 10:
         return False
