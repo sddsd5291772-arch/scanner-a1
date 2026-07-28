@@ -2,13 +2,13 @@ name: Run Forex Volatility Scanner
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Fires once a day automatically as a backup safety kickstart
-  workflow_dispatch:  # Allows manual trigger button capability
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 25 # Kills the runner forcefully if Python hangs
+    timeout-minutes: 25
     steps:
       - name: Checkout Repository Code
         uses: actions/checkout@v4
@@ -19,7 +19,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install Dependencies
-        run: pip install requests
+        run: pip install requests numpy
 
       - name: Execute Scanner Logic
         env:
