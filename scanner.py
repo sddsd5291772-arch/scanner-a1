@@ -1,3 +1,11 @@
+# ==========================================
+# 🎛️ TELEGRAM ALERT CONFIGURATION SWITCHES
+# ==========================================
+ENABLE_PRICE_CRASH_ALERTS = True   # Turn True/False for Vertical Price Crash notifications
+ENABLE_ATR_SPIKE_ALERTS = False     # Turn True/False for Vertical ATR Volatility Spike notifications
+ENABLE_THRESHOLD_ALERTS = False      # Turn True/False for Standard Threshold Move notifications
+# ==========================================
+
 # --- IMMEDIATE HARDCODED STARTUP PRINT ---
 print("🔥 IMMEDIATE SCRIPT ENTRY: Python is reading the file!", flush=True)
 
@@ -59,7 +67,7 @@ def trigger_next_runner():
     except Exception as e:
         print(f"❌ Network issue dispatching next link: {e}", flush=True)
 
-def detect_vertical_atr_spike(atr_history, min_jump_ratio=15.0):
+def detect_vertical_atr_spike(atr_history, min_jump_ratio=3.0):
     """Detects if the ATR has executed a vertical 'cliff' spike from a flat baseline."""
     if len(atr_history) < 10:
         return False
@@ -74,7 +82,6 @@ def detect_vertical_atr_spike(atr_history, min_jump_ratio=15.0):
     expansion_ratio = latest_atr / baseline_min
     recent_slope = latest_atr - atr_array[-3]
     
-    # Check if ATR multiplied rapidly and the jump is vertical
     if expansion_ratio >= min_jump_ratio and recent_slope > 0.0002:
         return True
         
@@ -86,11 +93,9 @@ def detect_vertical_price_crash(price_history):
         return False
         
     prices = list(price_history)
-    # Measure drop from 4 periods ago to current
     drop_amount = prices[-5] - prices[-1]
     drop_pct = drop_amount / prices[-5]
     
-    # If price plummeted by more than 0.08% sharply in a few ticks
     if drop_pct >= 0.0008:
         return True
         
@@ -143,18 +148,24 @@ def fetch_yahoo_prices():
                         
                         print(f"[{timestamp}] Live {display_name}: {current_price:.5f} | Move: {percent_change:+.4%}", flush=True)
                         
-                        # Check conditions
                         is_atr_cliff = detect_vertical_atr_spike(atr_buffer)
                         is_price_cliff = detect_vertical_price_crash(history)
                         
-                        if percent_change <= -FOREX_THRESHOLD or is_atr_cliff or is_price_cliff:
-                            if is_price_cliff:
-                                crash_type = "📉 VERTICAL PRICE CRASH (CLIFF DROP DETECTED)"
-                            elif is_atr_cliff:
-                                crash_type = "⚡ VERTICAL ATR VOLATILITY SPIKE"
-                            else:
-                                crash_type = "📉 STANDARD THRESHOLD CRASH"
-                                
+                        # Evaluate conditions against top toggle settings
+                        should_alert = False
+                        crash_type = ""
+                        
+                        if is_price_cliff and ENABLE_PRICE_CRASH_ALERTS:
+                            should_alert = True
+                            crash_type = "📉 VERTICAL PRICE CRASH (CLIFF DROP DETECTED)"
+                        elif is_atr_cliff and ENABLE_ATR_SPIKE_ALERTS:
+                            should_alert = True
+                            crash_type = "⚡ VERTICAL ATR VOLATILITY SPIKE"
+                        elif percent_change <= -FOREX_THRESHOLD and ENABLE_THRESHOLD_ALERTS:
+                            should_alert = True
+                            crash_type = "📉 STANDARD THRESHOLD CRASH"
+                            
+                        if should_alert:
                             msg = f"{crash_type}: {display_name} | Current Price: {current_price:.5f}"
                             print(f"🚨 ALERT: {msg}", flush=True)
                             send_alert(msg)
@@ -168,8 +179,8 @@ def fetch_yahoo_prices():
         time.sleep(CHECK_INTERVAL_SEC)
 
 if __name__ == "__main__":
-    print("🚀 MAIN BLOCK REACHED: Vertical Crash & ATR Scanner active!", flush=True)
+    print("🚀 MAIN BLOCK REACHED: Configurable Vertical Crash & ATR Scanner active!", flush=True)
     fetch_yahoo_prices()
     print("🔌 Session Complete. Spawning next link...", flush=True)
     trigger_next_runner()
-        
+    
